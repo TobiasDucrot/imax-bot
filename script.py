@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import os
 
 # --- CONFIGURACIÓN ---
-WEBHOOK_URL = "ACA_PEGA_TU_LINK_DE_DISCORD"
+WEBHOOK_URL = "https://discord.com/api/webhooks/1531801696181817364/1RY9tM8yVrpK36N_k0EUCDfJ5mYbo10d0iQ9md7oFkodtrJ_3ngig1hdbCTwF_5u2Otd"
 URL_SHOWCASE = "https://entradas.todoshowcase.com/showcase/pelicula?filmid=5875&house_id=3250"
 ARCHIVO_ESTADO = "fechas_vistas.txt"
 # ---------------------
