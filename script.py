@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import os
+import re
 
 # --- CONFIGURACIÓN ---
 WEBHOOK_URL = "https://discord.com/api/webhooks/1531801696181817364/1RY9tM8yVrpK36N_k0EUCDfJ5mYbo10d0iQ9md7oFkodtrJ_3ngig1hdbCTwF_5u2Otd"
@@ -10,24 +11,37 @@ ARCHIVO_ESTADO = "fechas_vistas.txt"
 
 def obtener_fechas():
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     try:
-        respuesta = requests.get(URL_SHOWCASE, headers=headers, timeout=10)
-        soup = BeautifulSoup(respuesta.text, 'html.parser')
+        respuesta = requests.get(URL_SHOWCASE, headers=headers, timeout=15)
         
+        if respuesta.status_code != 200:
+            print(f"Error HTTP al intentar entrar: {respuesta.status_code}")
+            return []
+            
+        soup = BeautifulSoup(respuesta.text, 'html.parser')
         fechas_encontradas = []
         
-        # En la web de Showcase, las fechas suelen estar en menús desplegables (options) 
-        # o botones. Extraemos los textos de las opciones disponibles.
-        opciones = soup.find_all('option')
-        for op in opciones:
-            texto = op.text.strip()
-            # Filtramos para quedarnos solo con lo que parezca una fecha (ej: contiene un número o mes)
-            if any(char.isdigit() for char in texto) and len(texto) < 30:
-                fechas_encontradas.append(texto)
+        # Leemos TODO el texto visible de la página
+        for texto in soup.stripped_strings:
+            t = texto.strip()
+            
+            # Buscamos patrones de horario (ej. 22:30) o días (ej. Mie 12, 12/08)
+            es_hora = re.search(r'\d{1,2}:\d{2}', t)
+            es_fecha = re.search(r'\d{1,2}[/-]\d{1,2}', t)
+            es_dia = re.search(r'(Lun|Mar|Mie|Mié|Jue|Vie|Sab|Sáb|Dom)\s*\d{1,2}', t, re.IGNORECASE)
+            
+            if (es_hora or es_fecha or es_dia) and len(t) < 20:
+                fechas_encontradas.append(t)
                 
-        return list(dict.fromkeys(fechas_encontradas)) # Elimina duplicados
+        # Eliminamos duplicados manteniendo el orden
+        fechas_unicas = list(dict.fromkeys(fechas_encontradas))
+        
+        # Esto imprime en el log lo que encontró para que podamos auditarlo
+        print("🔍 Datos encontrados en la web:", fechas_unicas) 
+        return fechas_unicas
+        
     except Exception as e:
         print(f"Error al leer la web: {e}")
         return []
@@ -35,33 +49,30 @@ def obtener_fechas():
 def main():
     fechas_actuales = obtener_fechas()
     if not fechas_actuales:
-        print("No se encontraron fechas o la estructura de la web cambió.")
+        print("No se encontraron fechas o la página está bloqueando la lectura directa.")
         return
 
-    # Leemos las fechas que el bot ya conoce
     fechas_conocidas = []
     if os.path.exists(ARCHIVO_ESTADO):
         with open(ARCHIVO_ESTADO, "r", encoding="utf-8") as f:
             fechas_conocidas = f.read().splitlines()
 
-    # Buscamos cuáles son nuevas
     nuevas_fechas = [f for f in fechas_actuales if f not in fechas_conocidas]
 
     if nuevas_fechas:
-        mensaje = "🚨 **¡NUEVAS FUNCIONES PARA LA ODISEA EN IMAX!** 🚨\n\nAgregaron:\n"
+        print(f"Nuevas funciones detectadas: {nuevas_fechas}")
+        mensaje = "🚨 **¡NUEVAS FUNCIONES PARA LA ODISEA EN IMAX!** 🚨\n\nAgregaron horarios o fechas:\n"
         for nf in nuevas_fechas:
             mensaje += f"🍿 {nf}\n"
         mensaje += f"\nCorré a comprar: {URL_SHOWCASE}"
         
-        # Mandar a Discord
         requests.post(WEBHOOK_URL, json={"content": mensaje})
 
-        # Guardar las nuevas fechas en el archivo para no volver a avisar por las mismas
         with open(ARCHIVO_ESTADO, "w", encoding="utf-8") as f:
             for fa in fechas_actuales:
                 f.write(f"{fa}\n")
     else:
-        print("Sin novedades.")
+        print("Sin novedades. Las fechas y horarios son los mismos de antes.")
 
 if __name__ == "__main__":
     main()
